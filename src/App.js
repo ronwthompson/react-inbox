@@ -1,8 +1,7 @@
-import React, { Component } from 'react';
-import Toolbar from './components/Toolbar';
-import Message from './components/Message';
-import MessageList from './components/MessageList';
-import seeds from './components/seeds';
+import React, { Component } from 'react'
+import Toolbar from './components/Toolbar'
+import MessageList from './components/MessageList'
+import Compose from './components/Compose'
 import './App.css';
 
 class App extends Component {
@@ -15,7 +14,8 @@ class App extends Component {
       markUnread: this.markUnread.bind(this),
       deleteEmail: this.deleteEmail.bind(this),
       selectAddLabel: this.selectAddLabel.bind(this),
-      selectRemoveLabel: this.selectRemoveLabel.bind(this)
+      selectRemoveLabel: this.selectRemoveLabel.bind(this),
+      composeClick: this.composeClick.bind(this)
     }
 
     this.messageFunctions = {
@@ -25,17 +25,30 @@ class App extends Component {
   }
 
   state = {
-    allMail: seeds.map(e => {
-                return {
-                  ...e,
-                  selected: false
-                }
-              }),
-    unreadEmails: countUnread(),
+    allMail: [],
+    unreadEmails: 0,
     anySelected: false,
     addLabel: '',
     removeLabel: '',
-    allSelected: false
+    allSelected: false,
+    composeOpen: false
+  }
+
+  async componentWillMount() {
+    const response = await fetch('http://localhost:8082/api/messages')
+    const json = await response.json()
+    this.setState(prev => {
+      return {
+        ...prev,
+        unreadEmails: countUnread(json._embedded.messages),
+        allMail: json._embedded.messages.map(e => {
+                return {
+                  ...e,
+                  selected: e.selected === undefined ? false : e.selected
+                }
+              })
+      }
+    })
   }
 
   async selectAll() {
@@ -56,84 +69,108 @@ class App extends Component {
   }
 
   async markRead() {
-    await this.setState(previous => {
-      let allMail = previous.allMail.map(select => select.selected ? {...select, read: true} : select)
-      return {...previous, allMail}
+    let changes = {
+      messageIds: this.state.allMail.filter(e => e.selected).map(e => e.id),
+      command: "read",
+      read: true
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
     })
-    this.setState(previous => {
-      return {...previous, unreadEmails: this.numUnread()}
-    })
+    this.componentWillMount()
   }
 
   async markUnread() {
-    await this.setState(previous => {
-      let allMail = previous.allMail.map(select => select.selected ? {...select, read: false} : select)
-      return {...previous, allMail}
+    let changes = {
+      messageIds: this.state.allMail.filter(e => e.selected).map(e => e.id),
+      command: "read",
+      read: false
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
     })
-    this.setState(previous => {
-      return {...previous, unreadEmails: this.numUnread()}
-    })
+    this.componentWillMount()
   }
 
-  deleteEmail(){
-    this.setState(previous => {
-      for (let i = previous.allMail.length-1; i > -1; i--){
-        if (previous.allMail[i].selected){
-          previous.allMail.splice(i,1)
-        } 
+  async deleteEmail(){
+    let changes = {
+      messageIds: this.state.allMail.filter(e => e.selected).map(e => e.id),
+      command: "delete"
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       }
-      return {...previous, unreadEmails: this.numUnread()}
     })
-  }
-
-  addLabel(){
-    this.setState(previous => {
-      for (let i = previous.allMail.length-1; i > -1; i--){
-        if (previous.allMail[i].selected){
-          if (!previous.allMail[i].labels.find(el => el == this.state.addLabel) && this.state.addLabel != 'Add Label'){
-            previous.allMail[i].labels.push(this.state.addLabel)
-          }
-        } 
-      }
-      return {...previous}
-    })
-  }
-
-  removeLabel(){
-    this.setState(previous => {
-      for (let i = previous.allMail.length-1; i > -1; i--){
-        if (previous.allMail[i].selected){
-          if (previous.allMail[i].labels.find(el => el == this.state.addLabel) && this.state.addLabel != 'Add Label'){
-            const temp = previous.allMail[i].labels.findIndex(el => el == this.state.addLabel)
-            previous.allMail[i].labels.splice(temp, 1)
-          }
-        } 
-      }
-      return {...previous}
-    })
+    this.componentWillMount()
   }
 
   async selectAddLabel(e){
-    const temp = e.target.value
-    await this.setState(previous => {
-      return {...previous, addLabel: temp}
+    const labelName = e.target.value
+    if (labelName === 'Apply Label') return
+    let changes = {
+      messageIds: this.state.allMail.filter(e => e.selected).filter(e => !e.labels.includes(labelName)).map(e => e.id),
+      command: "addLabel",
+      label: labelName
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
     })
-    this.addLabel()
+    this.componentWillMount()
   }
 
   async selectRemoveLabel(e){
-    const temp = e.target.value
-    await this.setState(previous => {
-      return {...previous, addLabel: temp}
+    const labelName = e.target.value
+    if (labelName === 'Remove Label') return
+    let changes = {
+      messageIds: this.state.allMail.filter(e => e.selected).filter(e => e.labels.includes(labelName)).map(e => e.id),
+      command: "removeLabel",
+      label: labelName
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
     })
-    this.removeLabel()
+    this.componentWillMount()
   }
 
-  starClick(id) {
-    this.setState(previous => {
-      let allMail = previous.allMail.map(star => star.id === id ? {...star, starred: !star.starred} : star)
-      return {...previous, allMail}
+  async starClick(id) {
+    let changes = {
+      messageIds: [ id ],
+      command: "star",
+      star: this.state.allMail.filter(e => e.id === id)[0].starred ? false : true
+    }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
     })
+    this.componentWillMount()
   }
 
   async selectClick(id) {
@@ -165,20 +202,52 @@ class App extends Component {
     return count
   }
 
+  composeClick(){
+    this.setState(prev => {
+      return {
+        ...prev,
+        composeOpen: !this.state.composeOpen
+      }
+    })
+  }
+
+  composeMessage = async (e) => {
+    e.preventDefault()
+    const subject = document.getElementById('composition')[0].value
+    const body = document.getElementById('composition')[1].value
+    let changes = { subject, body }
+    await fetch('http://localhost:8082/api/messages', {
+      method: 'POST',
+      body: JSON.stringify(changes),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      }
+    })
+    await this.setState(prev => {
+      return {
+        ...prev,
+        composeOpen: false
+      }
+    })
+    this.componentWillMount()
+  }
+
   render() {
     return (
       <div className='container'>
         <Toolbar toolbarFunctions={ this.toolbarFunctions } unread={ this.state.unreadEmails } buttons={ this.state.anySelected } allSelected={ this.state.allSelected } />
+        { this.state.composeOpen ? <Compose composeMessage={this.composeMessage} /> : '' }
         <MessageList messageFunctions={ this.messageFunctions } seeds={ this.state.allMail }/>
       </div>
     )
   }
 }
 
-function countUnread(){
+function countUnread(arr){
   let count = 0
-  for (let i = 0; i < seeds.length; i++){
-    if (!seeds[i].read) count++
+  for (let i = 0; i < arr.length; i++){
+    if (!arr[i].read) count++
   }
   return count
 }

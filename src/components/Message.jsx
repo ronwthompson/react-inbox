@@ -35,7 +35,7 @@ class Message extends Component {
         </div>
         <div className="col-xs-11">
           { this.props.seed.labels.map((label, i) => <span className="label label-warning" key={ i }>{ label }</span>) }
-          <a href="#">
+          <a>
             { this.props.seed.subject }
           </a>
         </div>

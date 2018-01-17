@@ -1,9 +1,6 @@
 import React, { Component } from 'react';
 
 class Toolbar extends Component {
-  constructor(props){
-    super(props)
-  }
   
   render() {
     let checkStatus = 'fa'
@@ -17,6 +14,10 @@ class Toolbar extends Component {
             <span className="badge badge">{ this.props.unread }</span>
             unread messages
           </p>
+
+          <a className="btn btn-danger" onClick={ this.props.toolbarFunctions.composeClick }>
+            <i className="fa fa-plus"></i>
+          </a>
 
           <button className="btn btn-default">
             <i className={ checkStatus } onClick={ this.props.toolbarFunctions.selectAll } ></i>
